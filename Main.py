@@ -6,22 +6,17 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 
 class GUI:
-    def main():
+    def __init__(self):
+        self.window = None
+
+    def create_main_window(self):
         layout = [
             [sg.Text("Website"), sg.Input(key="-WEBSITE-")],
             [sg.Button("Start Bot"), sg.Button("Options")]
-            ]
-        window = sg.Window("Py Bot", layout)
-        while True:
-            event, values = window.read()
-            if event == "Start Bot":
-                print("In development")
-            if event == "Options":
-                GUI.options()
-            if event == sg.WIN_CLOSED:
-                sys.exit()
-        window.close()
-    def options():
+        ]
+        self.window = sg.Window("Py Bot", layout)
+
+    def create_options_window(self):
         layout = [
             [sg.Text("Provided information will be saved locally only, if selected to.")],
             [sg.Text("Card Number"), sg.Input(key="-CARD-")],
@@ -31,15 +26,29 @@ class GUI:
             [sg.Text("State"), sg.Input(key="-STATE-")],
             [sg.CheckBox("Save Information for future use", key="-SAVEINFO-")],
             [sg.Button("Apply Info")]
-            ]
-        window = sg.Window("Py Bot", layout)
+        ]
+        return sg.Window("Py Bot", layout)
+
+    def main(self):
+        self.create_main_window()
         while True:
-            event, values = window.read()
+            event, values = self.window.read()
+            if event == "Start Bot":
+                print("In development")
+            if event == "Options":
+                self.options()
             if event == sg.WIN_CLOSED:
                 sys.exit()
-        window.close()
+        self.window.close()
+
+    def options(self):
+        options_window = self.create_options_window()
+        while True:
+            event, values = options_window.read()
+            if event == sg.WIN_CLOSED:
+                break
+        options_window.close()
 
 if __name__ == '__main__':
-    GUI.main()
-            
-        
+    gui = GUI()
+    gui.main()
