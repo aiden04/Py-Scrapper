@@ -39,6 +39,7 @@ class GUI:
                 sys.exit()
         window.close()
 
-GUI.main()
+if __name__ == '__main__':
+    GUI.main()
             
         
