@@ -23,7 +23,7 @@ class GUI:
         window.close()
     def options():
         layout = [
-            ["Provided information will be saved locally only, if selected to.],
+            [sg.Text("Provided information will be saved locally only, if selected to.")],
             [sg.Text("Card Number"), sg.Input(key="-CARD-")],
             [sg.Text("Name on Card"), sg.Input(key="-NAME-")],
             [sg.Text("Street Address"), sg.Input(key="-STREET-")],
