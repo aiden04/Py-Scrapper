@@ -1,20 +1,30 @@
 import PySimpleGUI as sg
-import sqlite3
-import sys
-import os
+import sqlite3, sys, os, requests, urllib
 from cryptography.fernet import Fernet
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
+from fake_useragent import UserAgent as ua
 
-class ConsoleRedirector:
-    def __init__(self, element):
-        self.element = element
 
-    def write(self, message):
-        self.element.print(message)
+class ScrapeDoProxyManager:
+    def __init__(self, url, api_key):
+        self.url = url
+        self.auth = api_key
+        self.current_proxy = None
+        print(f"Proxy Manager Initialized with Url '{url}', and api_key '{api_key}'")
 
-    def flush(self):
-        pass  # Add a flush method to avoid AttributeError
+    def get_proxy(self):
+        encoded_url = urllib.parse.quote(self.url)
+        print(f"Encoded Url: {encoded_url}")
+        print(f"API Key: {self.auth}")
+        self.current_proxy = "http://api.scrape.do?token={}&url={}".format(self.auth, encoded_url)
+        print(f"Current Proxy: {self.current_proxy}")
+        return self.current_proxy
+
+    def make_request(self, url):
+        response = requests.request("GET", url)
+        print(response.text)
+        return
 
 class Cipher:
     def __init__(self, db_path):
@@ -97,6 +107,11 @@ class SQLite:
             decrypted_billing = [cipher.decrypt(value) for value in billing]
             return decrypted_billing
         return None
+    def save_login(self, login):
+        self.cur.execute("CREATE TABLE IF NOT EXISTS Login (Username TEXT, Password TEXT)")
+        encrypted_login = [cipher.encrypt(value) for value in login]
+        self.cur.execute("INSERT INTO Login (Username, Password) VALUES (?, ?)", encrypted_login)
+        self.conn.commit()
 
 
 class GUI:
@@ -104,7 +119,8 @@ class GUI:
         self.db_path = db_path
         self.ttk_theme = "clam"
         self.window = None
-        self.console_output_elem = None  # Reference to the Multiline element
+        self.in_options = False  # Flag to track if in options window
+        self.run_main_loop = True  # Flag to control running the main loop
         sg.theme("SystemDefault")
 
     def create_main_window(self):
@@ -114,19 +130,18 @@ class GUI:
             [sg.Text("Enter the section of the Ticket Master link after 'https://www.ticketmaster.com/event/'")],
             [sg.Text("-" * 100)],
             [sg.Text("Website:"), sg.Text("https://www.ticketmaster.com/event/"), sg.Input(key="-WEBSITE-", size=(15, 1))],
-            [sg.Button("Start Bot", size=(10, 1)), sg.Button("Options", size=(10, 1))],
-            [sg.Multiline(size=(70, 12), key="-CONSOLE-", autoscroll=True)],  # Add Multiline element for console output
+            [sg.Button("Start Bot", size=(10, 1)), sg.Button("Options", size=(10, 1))]
         ]
         self.window = sg.Window("Py Bot", layout, use_ttk_buttons=True, ttk_theme=self.ttk_theme, element_justification="center", finalize=True)
-        self.console_output_elem = self.window["-CONSOLE-"]  # Get a reference to the Multiline element
-
-        # Redirect stdout to the Multiline element after initializing console_output_elem
-        sys.stdout = ConsoleRedirector(self.console_output_elem)
 
     def create_options_window(self):
         layout = [
             [sg.Text("Options", font=("Helvetica", 20))],
             [sg.Text(f'Save information to:\n"{self.db_path}"', font=("Helvetica", 10))],
+            [sg.Text("-----------------Ticket Master Login-----------------")],
+            [sg.Text("Username", size=(11, 1)), sg.Input(key="-USERNAME-", size=(18, 1))],
+            [sg.Text("Password", size=(11, 1)), sg.Input(key="-PASSWORD-", size=(18, 1))],
+            [sg.Text("--------------------------Billing--------------------------")],
             [sg.Text("Card Number", size=(11, 1)), sg.Input(key="-CARD-", size=(18, 1))],
             [sg.Text("Exp Date", size=(11, 1)), sg.Input(key="-EXPDATE-", size=(5, 1)), sg.Text("CVV"), sg.Input(key="-CVV-", size=(5, 1))],
             [sg.Text("Name on Card", size=(11, 1)), sg.Input(key="-NAME-", size=(18, 1))],
@@ -136,28 +151,7 @@ class GUI:
             [sg.Checkbox("Save Information for future use", key="-SAVEINFO-", font=("Helvetica", 10))],
             [sg.Button("Apply Info", size=(10, 1)), sg.Button("Clear Saved Info", size=(15, 1)), sg.Button("Back", size=(10, 1))],
         ]
-        return sg.Window("Py Bot", layout, use_ttk_buttons=True, ttk_theme=self.ttk_theme, finalize=True, element_justification="center")
-
-    def main(self):
-        self.create_main_window()
-        print(f"DataBase Local Path: {self.db_path}")
-        Cipher(self.db_path)
-        while True:
-            event, values = self.window.read()
-            if event == "Start Bot":
-                print("In development")
-                driver_options = webdriver.ChromeOptions()
-                driver_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36")
-                print(f"WebDriver Options: {driver_options}")
-                driver = webdriver.Chrome(options=driver_options)
-                driver.get(f"https://www.ticketmaster.com/event/{values['-WEBSITE-']}")
-            if event == "Options":
-                self.window.hide()
-                self.options()
-                self.window.un_hide()
-            if event == sg.WIN_CLOSED:
-                sys.exit()
-        self.window.close()
+        return sg.Window("Py Bot", layout, use_ttk_buttons=True, ttk_theme=self.ttk_theme, element_justification="center")
 
     def options(self):
         options_window = self.create_options_window()
@@ -178,7 +172,11 @@ class GUI:
                     db = SQLite(self.db_path)
                     db.save_billing(billing)
                     print("Encrypted Billing Saved!")
-                    sg.popup(f"Saved Encrypted Billing Information to {self.db_path}")
+                    login = [values["-USERNAME-"], values["-PASSWORD-"]]
+                    print(f"Provided Login: {login}")
+                    db.save_login(login)
+                    print("Encrypted Login Saved!")
+                    sg.popup(f"Saved Encrypted Billing and Login Information to {self.db_path}")
                 else:
                     temp_card = values["-CARD-"]
                     temp_expdate = values["-EXPDATE-"]
@@ -198,9 +196,46 @@ class GUI:
                     options_window[key].update("")
             if event == 'Back':
                 options_window.close()
+                self.in_options = False  # Set the flag to indicate returning to the main window
+                break  # Exit the options loop
             if event == sg.WIN_CLOSED:
                 break
         options_window.close()
+
+    def main(self):
+        self.create_main_window()
+        print(f"DataBase Local Path: {self.db_path}")
+        Cipher(self.db_path)
+        while self.run_main_loop:  # Check the flag before entering the main loop
+            event, values = self.window.read()
+            if event == "Start Bot":
+                    #Initialize proxie and vpn rotation
+                target_url = "https://httpbin.co/ip"
+                api_key = ""
+                proxy_manager = ScrapeDoProxyManager(target_url, api_key)
+                proxy = proxy_manager.get_proxy()
+                print(f"Retrieved Proxy: {proxy}")
+                driver_options = webdriver.ChromeOptions()
+                driver_options.add_argument("--disable-blink-features=AutomationControlled") 
+                driver_options.add_argument("--proxy-server=%s" % proxy) 
+                user_agent = ua.random
+                print(f"User Agent Selected: {user_agent}")
+                driver_options.add_argument(f"--user-agent={user_agent}")
+                driver_options.add_experimental_option("excludeSwitches", ["enable-automation"]) 
+                driver_options.add_experimental_option("useAutomationExtension", False)
+                print(f"Current Driver Options: {driver_options}")
+                driver = webdriver.Chrome(driver_options)
+                driver.get("https://www.ticketmaster.com/event/")
+            if event == "Options":
+                self.in_options = True  # Set the flag to indicate entering the options window
+                self.options()
+            if event == sg.WIN_CLOSED:
+                if not self.in_options:
+                    self.run_main_loop = False  # Set the flag to exit the main loop
+                else:
+                    self.in_options = False  # Reset the flag when closing the options window
+
+        self.window.close()
 
 if __name__ == '__main__':
     root = os.path.dirname(sys.argv[0])
